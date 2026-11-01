@@ -252,7 +252,14 @@ mod tests {
     #[test]
     fn should_reject_illegal_prefix() {
         for bad in [
-            "Book", "1book", "book-", "book;drop", "book__x", "book_", "书", " book",
+            "Book",
+            "1book",
+            "book-",
+            "book;drop",
+            "book__x",
+            "book_",
+            "书",
+            " book",
         ] {
             assert!(validate(bad).is_err(), "应拒绝：{bad:?}");
         }

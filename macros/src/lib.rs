@@ -23,12 +23,11 @@
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{quote, ToTokens};
-use syn::punctuated::Punctuated;
+use quote::{ToTokens, quote};
 use syn::parse::Parser;
+use syn::punctuated::Punctuated;
 use syn::{
-    Attribute, Data, DeriveInput, Ident, LitStr, Meta, Path, Token, parse_macro_input,
-    parse_quote,
+    Attribute, Data, DeriveInput, Ident, LitStr, Meta, Path, Token, parse_macro_input, parse_quote,
 };
 
 /// 表前缀感知的实体声明宏（替代 `sea_orm::DeriveEntityModel` + `table_name`）。
