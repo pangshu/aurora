@@ -14,6 +14,7 @@
 //! - [`http`]：Router 与中间件栈（[`build_router`](http::build_router)、[`ApiResponse`](http::ApiResponse)）
 //! - [`openapi`]：OpenAPI 文档装配（feature `openapi`；[`OpenApiRouter`](openapi::OpenApiRouter)）
 //! - [`telemetry`]：日志 / 追踪 / 健康检查（[`init_tracing`](telemetry::init_tracing)）
+//! - [`template`]：模板渲染（feature `template`；[`TemplateEngine`](template::TemplateEngine)）
 //! - [`utils`]：通用工具（时间、ID、分页、客户端 IP）
 //! - [`macros`]：声明宏
 //!
@@ -76,6 +77,8 @@ pub mod search;
 #[cfg(feature = "security")]
 pub mod security;
 pub mod telemetry;
+#[cfg(feature = "template")]
+pub mod template;
 #[cfg(feature = "testing")]
 pub mod testing;
 #[cfg(feature = "tls")]

@@ -135,6 +135,11 @@ ipnet = { version = "2", features = ["serde"] }
 # i18n / TLS / 热更新 / 日志 / 测试
 fluent = { version = "0.16", optional = true }
 unic-langid = { version = "0.9", optional = true }
+# 模板引擎（feature `template`，docs/20）：Jinja2 语法兼容，依赖极轻。
+# 3.0 起 `serde` 是**可选且默认关闭**的特性，本框架的 `render(ctx: Serialize)`
+# 依赖它，必须显式开启；旧版的 `loader` 特性已成 no-op 并移除（loader API 无条件可用）。
+# 版本不锁 patch：升级后以 `cargo test --features template` 为准。
+minijinja = { version = "3", optional = true, features = ["serde"] }
 # `tls-rustls`：HTTPS / SNI 入口（`tls_rustls::RustlsConfig` + `bind_rustls`）
 axum-server = { version = "0.8", optional = true, features = ["tls-rustls"] }
 # 自建 accept loop（feature `serve-hardened`）：装上 hyper 的 Timer，
@@ -245,6 +250,18 @@ resilience = []
 ws = ["axum/ws", "dep:futures-util"]
 sse = ["dep:futures-util"]
 i18n = ["dep:fluent", "dep:unic-langid"]
+
+# —— 模板（docs/20）——
+# **不进 `standard`**：API-only 应用不该背一个 HTML 引擎（docs/20 §12-4）。
+# `template-i18n`（P3）届时再追加。
+template = ["dep:minijinja"]
+# 目录热更新：监听 `[template].dir`，静默 200 ms 后原子重载。
+# 只 `dep:notify`、**不蕴含 `watch`**：两者是独立语义（配置热更新 / 模板热更新），
+# 复用的是同一个 notify 依赖，不会引入第二份。
+template-hot-reload = ["template", "dep:notify"]
+# 模板内调用 fluent 翻译（`{{ t("key") }}` / `{{ t("key", name = x) }}`）。
+# 蕴含 `i18n`：没有语言资源与协商，就没有可翻译的东西。
+template-i18n = ["template", "i18n"]
 tls = [
     "dep:axum-server",
     "dep:rustls",
@@ -349,6 +366,10 @@ full = [
     "geoip",
     "testing",
     "ocsp-stapling",
+    # 模板引擎只进 `full`：`standard` 面向 API 服务，不该背上 HTML 渲染（docs/20 §12-4）
+    "template",
+    "template-hot-reload",
+    "template-i18n",
 ]
 
 [dev-dependencies]
@@ -415,6 +436,11 @@ required-features = ["ws", "sse"]
 [[example]]
 name = "search_articles"
 required-features = ["search"]
+
+# 模板渲染（docs/20 P1）：不依赖数据库/缓存，单跑即可。模板见 examples/templates/。
+[[example]]
+name = "template_basic"
+required-features = ["template"]
 
 [[example]]
 name = "middleware_stack"

@@ -36,6 +36,8 @@ pub(crate) mod search;
 pub(crate) mod security;
 mod server;
 mod telemetry;
+#[cfg(feature = "template")]
+pub(crate) mod template;
 #[cfg(feature = "tls")]
 pub(crate) mod tls;
 #[cfg(feature = "security")]
@@ -99,6 +101,8 @@ pub use telemetry::{
 };
 #[cfg(feature = "tls")]
 pub use tls::{OcspSection, TlsSection};
+#[cfg(feature = "template")]
+pub use template::TemplateSection;
 #[cfg(feature = "security")]
 pub use validation::ValidationSection;
 #[cfg(feature = "watch")]

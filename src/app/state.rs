@@ -17,6 +17,7 @@
     feature = "geoip",
     feature = "task",
     feature = "security",
+    feature = "template",
     feature = "metrics"
 ))]
 use axum::extract::FromRef;
@@ -44,6 +45,8 @@ use crate::scheduler::Scheduler;
 #[cfg(feature = "security")]
 use crate::security::SecurityContext;
 use crate::telemetry::HealthRegistry;
+#[cfg(feature = "template")]
+use crate::template::TemplateEngine;
 #[cfg(feature = "metrics")]
 use crate::telemetry::Metrics;
 
@@ -69,6 +72,12 @@ pub struct AppState {
     /// 国际化（feature `i18n`）。
     #[cfg(feature = "i18n")]
     pub i18n: I18n,
+    /// 模板引擎（feature `template`）。
+    ///
+    /// 启动期已全量加载并编译（任一模板语法错误即拒绝启动）。渲染失败一律映射为
+    /// `50008` 的**统一 JSON 错误体**，不提供 HTML 错误页（`docs/20` §1.2）。
+    #[cfg(feature = "template")]
+    pub template: TemplateEngine,
     /// IP 地理定位（feature `geoip`）。
     #[cfg(feature = "geoip")]
     pub geoip: GeoIp,
@@ -99,6 +108,11 @@ pub struct AppState {
     /// 若只放在局部变量里，函数返回后热更新立刻停止。
     #[cfg(feature = "watch")]
     pub config_watcher: Option<std::sync::Arc<crate::config::ConfigWatcher>>,
+    /// 模板目录监听器（feature `template-hot-reload`，`[template].hot_reload = true` 时存在）。
+    ///
+    /// 同 `config_watcher`：持有它只是为了「让监听任务活着」，drop 即停止监听。
+    #[cfg(all(feature = "template", feature = "template-hot-reload"))]
+    pub template_watcher: Option<std::sync::Arc<crate::template::TemplateWatcher>>,
 }
 
 /// 子状态拆分：`State<RateLimitService>` 可直接注入 handler。
@@ -186,5 +200,13 @@ impl FromRef<AppState> for AuthService {
 impl FromRef<AppState> for SecurityContext {
     fn from_ref(state: &AppState) -> Self {
         state.security.clone()
+    }
+}
+
+/// 子状态拆分：`State<TemplateEngine>` 可直接注入 handler。
+#[cfg(feature = "template")]
+impl FromRef<AppState> for TemplateEngine {
+    fn from_ref(state: &AppState) -> Self {
+        state.template.clone()
     }
 }

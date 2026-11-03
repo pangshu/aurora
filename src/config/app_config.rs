@@ -45,6 +45,9 @@ pub struct AppConfig {
     /// `[i18n]` 段（feature `i18n`）。
     #[cfg(feature = "i18n")]
     pub i18n: I18nSection,
+    /// `[template]` 段（feature `template`）。
+    #[cfg(feature = "template")]
+    pub template: TemplateSection,
     /// `[geoip]` 段（feature `geoip`）。
     #[cfg(feature = "geoip")]
     pub geoip: GeoIpSection,
@@ -151,6 +154,8 @@ impl AppConfig {
         self.queue.validate().map_err(StartupError::Config)?;
         #[cfg(feature = "i18n")]
         self.i18n.validate().map_err(StartupError::Config)?;
+        #[cfg(feature = "template")]
+        self.template.validate().map_err(StartupError::Config)?;
         #[cfg(feature = "geoip")]
         self.geoip
             .validate_for_env(production)

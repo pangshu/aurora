@@ -89,6 +89,12 @@ impl ErrorCode {
     ///
     /// 同 [`CIRCUIT_OPEN`](Self::CIRCUIT_OPEN)：自身拒绝，不可重试、不计入上游熔断。
     pub const BULKHEAD_FULL: Self = Self(50007);
+    /// 模板渲染失败（500）。
+    ///
+    /// 客户端只收到固定文案；模板名 / 行号 / 引擎明细只进日志（见 `docs/20` §7.2）。
+    /// 「模板不存在」默认也走本码——模板名若来自 URL，由业务用
+    /// `TemplateError::is_not_found()` 自行转 `30001`。
+    pub const TEMPLATE_ERROR: Self = Self(50008);
 
     /// 由原始 `i32` 构造错误码。
     ///
@@ -167,6 +173,7 @@ impl ErrorCode {
             50001 | 50002 | 50004 => StatusCode::INTERNAL_SERVER_ERROR,
             50003 => StatusCode::BAD_GATEWAY,
             50005..=50007 => StatusCode::SERVICE_UNAVAILABLE,
+            50008 => StatusCode::INTERNAL_SERVER_ERROR,
             // 分段回退
             raw if raw >= 10000 && raw < 20000 => StatusCode::BAD_REQUEST,
             raw if raw >= 20000 && raw < 30000 => StatusCode::FORBIDDEN,
@@ -207,6 +214,7 @@ impl ErrorCode {
             50005 => "服务暂不可用",
             50006 => "下游熔断中，请稍后重试",
             50007 => "并发已满，请稍后重试",
+            50008 => "模板渲染失败",
             _ => "",
         }
     }
@@ -292,6 +300,14 @@ mod tests {
             ErrorCode::SERVICE_UNAVAILABLE.status(),
             StatusCode::SERVICE_UNAVAILABLE
         );
+        // 模板渲染失败是「本进程 bug / 配置问题」，不是服务不可用：
+        // 归 503 会让上游/SLB 把它当成容量问题重试，掩盖真实原因。
+        assert_eq!(
+            ErrorCode::TEMPLATE_ERROR.status(),
+            StatusCode::INTERNAL_SERVER_ERROR
+        );
+        assert_eq!(ErrorCode::TEMPLATE_ERROR.default_message(), "模板渲染失败");
+        assert_eq!(ErrorCode::TEMPLATE_ERROR.as_i32(), 50008);
     }
 
     #[test]

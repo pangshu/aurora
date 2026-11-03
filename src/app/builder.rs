@@ -249,6 +249,36 @@ impl AppState {
         let i18n = I18n::from_config(&config.i18n)
             .map_err(|e| StartupError::Config(format!("i18n init failed: {e}")))?;
 
+        // 模板引擎（feature template）：启动期全量加载并编译，**任一模板失败即拒绝启动**
+        // （fail fast，docs/20 §12-2）。`[template].dir` 为空表示「模板全部由业务注入」，
+        // 此时不碰文件系统、以空集合启动（docs/20 §12-1）。
+        #[cfg(feature = "template")]
+        let template = crate::template::TemplateEngine::from_config(&config.template)
+            .map_err(|e| StartupError::Resource(format!("template init failed: {e}")))?;
+
+        // 模板目录热更新（feature template-hot-reload）：与配置热更新同策——启动失败
+        // **不阻断**（开发期便利，不是正确性依赖），只告警并继续以静态模板运行。
+        #[cfg(all(feature = "template", feature = "template-hot-reload"))]
+        let template_watcher = if config.template.hot_reload
+            && !config.template.dir.trim().is_empty()
+        {
+            match template.watch() {
+                Ok(watcher) => {
+                    tracing::info!(
+                        dir = %config.template.dir,
+                        "模板热更新已启用（静默 200ms 后重载）"
+                    );
+                    Some(std::sync::Arc::new(watcher))
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "模板热更新启动失败，继续以静态模板运行");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         // 指标（feature metrics）：纯内存注册表，无外部依赖
         #[cfg(feature = "metrics")]
         let metrics = Metrics::new();
@@ -325,6 +355,8 @@ impl AppState {
             security,
             #[cfg(feature = "i18n")]
             i18n,
+            #[cfg(feature = "template")]
+            template,
             #[cfg(feature = "geoip")]
             geoip,
             #[cfg(feature = "task")]
@@ -335,6 +367,8 @@ impl AppState {
             db,
             #[cfg(feature = "watch")]
             config_watcher,
+            #[cfg(all(feature = "template", feature = "template-hot-reload"))]
+            template_watcher,
         })
     }
 }
@@ -366,6 +400,91 @@ fn probe_timeout(config: &AppConfig) -> Duration {
         Duration::from_millis(1)
     } else {
         capped
+    }
+}
+
+#[cfg(all(test, feature = "template", feature = "template-hot-reload"))]
+mod template_wiring_tests {
+    use std::path::PathBuf;
+    use std::time::Duration;
+
+    use super::*;
+    use crate::config::Environment;
+
+    struct TempDir(PathBuf);
+
+    impl TempDir {
+        fn new(tag: &str) -> Self {
+            let dir = std::env::temp_dir().join(format!(
+                "aurora-template-wiring-{tag}-{}",
+                crate::utils::Id::uuid()
+            ));
+            std::fs::create_dir_all(&dir).expect("创建临时目录");
+            std::fs::write(dir.join("page.html"), "v1").expect("写入模板");
+            Self(dir)
+        }
+
+        fn as_config_dir(&self) -> String {
+            self.0.to_string_lossy().into_owned()
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn config(dir: &str, hot_reload: bool) -> AppConfig {
+        let mut config = AppConfig {
+            env: Environment::Development,
+            ..AppConfig::default()
+        };
+        config.template.dir = dir.to_string();
+        config.template.hot_reload = hot_reload;
+        config
+    }
+
+    #[tokio::test]
+    async fn should_start_watcher_when_hot_reload_enabled() {
+        let dir = TempDir::new("on");
+        let state = AppState::build(&config(&dir.as_config_dir(), true))
+            .await
+            .expect("装配应成功");
+
+        assert!(
+            state.template_watcher.is_some(),
+            "hot_reload = true 时 AppState 必须持有监听器（否则任务被 drop，监听失效）"
+        );
+
+        std::fs::write(dir.0.join("page.html"), "v2").expect("改写模板");
+
+        let mut reloaded = false;
+        for _ in 0..50 {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let body = state
+                .template
+                .render("page.html", serde_json::json!({}))
+                .map(|rendered| rendered.into_body())
+                .unwrap_or_default();
+            if body == "v2" {
+                reloaded = true;
+                break;
+            }
+        }
+        assert!(reloaded, "装配后的引擎应随文件变化自动更新");
+    }
+
+    #[tokio::test]
+    async fn should_not_start_watcher_when_hot_reload_disabled() {
+        let dir = TempDir::new("off");
+        let state = AppState::build(&config(&dir.as_config_dir(), false))
+            .await
+            .expect("装配应成功");
+        assert!(
+            state.template_watcher.is_none(),
+            "默认关闭：生产改模板应走后台编辑，而不是监听容器内文件"
+        );
     }
 }
 
