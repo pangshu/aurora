@@ -549,7 +549,10 @@ mod tests {
             ..section()
         };
         let error = TemplateEngine::from_config(&config).expect_err("目录缺失必须失败");
-        assert!(error.to_string().contains("模板目录不可读"), "实际：{error}");
+        assert!(
+            error.to_string().contains("模板目录不可读"),
+            "实际：{error}"
+        );
     }
 
     #[test]
@@ -712,12 +715,10 @@ mod tests {
             }
         }
 
-        let dir = TempDir(
-            std::env::temp_dir().join(format!(
-                "aurora-template-watch-{}",
-                crate::utils::Id::uuid()
-            )),
-        );
+        let dir = TempDir(std::env::temp_dir().join(format!(
+            "aurora-template-watch-{}",
+            crate::utils::Id::uuid()
+        )));
         std::fs::create_dir_all(&dir.0).expect("创建临时目录");
         std::fs::write(dir.0.join("page.html"), "v1").expect("写入模板");
 

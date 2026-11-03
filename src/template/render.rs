@@ -85,7 +85,9 @@ mod tests {
 
     #[tokio::test]
     async fn should_keep_custom_status() {
-        let response = Rendered::new("").with_status(StatusCode::NOT_FOUND).into_response();
+        let response = Rendered::new("")
+            .with_status(StatusCode::NOT_FOUND)
+            .into_response();
         assert_eq!(response.status(), StatusCode::NOT_FOUND);
     }
 }

@@ -21,8 +21,8 @@ use std::fmt;
 use std::sync::Arc;
 
 use fluent::FluentArgs;
-use minijinja::value::{Kwargs, Object, Serde};
 use minijinja::Value;
+use minijinja::value::{Kwargs, Object, Serde};
 use serde::Serialize;
 
 use crate::errors::AppResult;
@@ -218,7 +218,12 @@ mod tests {
         // 翻译缺失不报错：Translator 的约定是「原样返回 key」，便于发现漏翻
         let engine = engine(r#"{{ t("not.translated") }}"#);
         let rendered = engine
-            .render_i18n("page.html", serde_json::json!({}), &i18n(), &locale("zh-CN"))
+            .render_i18n(
+                "page.html",
+                serde_json::json!({}),
+                &i18n(),
+                &locale("zh-CN"),
+            )
             .expect("缺翻译不应让页面失败");
         assert_eq!(rendered.into_body(), "not.translated");
     }
@@ -228,12 +233,14 @@ mod tests {
         // 翻译文本同样走自动转义：.ftl 里的尖括号不能变成标签
         let engine = engine(r#"{{ t("hello") }}"#);
         let rendered = engine
-            .render_i18n("page.html", serde_json::json!({}), &i18n(), &locale("zh-CN"))
+            .render_i18n(
+                "page.html",
+                serde_json::json!({}),
+                &i18n(),
+                &locale("zh-CN"),
+            )
             .unwrap();
-        assert!(
-            !rendered.body().contains("<script"),
-            "翻译结果也必须转义"
-        );
+        assert!(!rendered.body().contains("<script"), "翻译结果也必须转义");
     }
 
     #[test]

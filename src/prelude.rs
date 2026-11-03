@@ -21,8 +21,6 @@ pub use crate::geoip::{ClientGeo, GeoInfo, GeoIp};
 pub use crate::http::{ApiResponse, AppRouter, AppRoutes, RequestContext, build_router};
 #[cfg(feature = "i18n")]
 pub use crate::i18n::{I18n, Locale, Translator};
-#[cfg(feature = "template")]
-pub use crate::template::{FsSource, MemorySource, Rendered, TemplateEngine, TemplateError, TemplateSource};
 #[cfg(feature = "openapi")]
 pub use crate::openapi::OpenApiRouter;
 #[cfg(feature = "queue")]
@@ -45,6 +43,10 @@ pub use crate::security::{
     verify_password, verify_password_or_dummy,
 };
 pub use crate::telemetry::{TraceId, init_tracing};
+#[cfg(feature = "template")]
+pub use crate::template::{
+    FsSource, MemorySource, Rendered, TemplateEngine, TemplateError, TemplateSource,
+};
 #[cfg(feature = "testing")]
 pub use crate::testing::TestApp;
 #[cfg(feature = "tls")]

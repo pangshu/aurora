@@ -126,10 +126,7 @@ impl TemplateSource for FsSource {
         // 目录不存在 / 不可读 → 直接失败（fail fast，docs/20 §12-2）。
         // 「空目录」才是合法的「暂无模板」，两者不能混为一谈。
         let root = self.dir.canonicalize().map_err(|error| {
-            TemplateError::load(format!(
-                "模板目录不可读（{}）：{error}",
-                self.dir.display()
-            ))
+            TemplateError::load(format!("模板目录不可读（{}）：{error}", self.dir.display()))
         })?;
 
         let mut templates: Vec<(String, String)> = Vec::new();
@@ -142,10 +139,7 @@ impl TemplateSource for FsSource {
 
             for entry in entries {
                 let entry = entry.map_err(|error| {
-                    TemplateError::load(format!(
-                        "遍历目录失败（{}）：{error}",
-                        current.display()
-                    ))
+                    TemplateError::load(format!("遍历目录失败（{}）：{error}", current.display()))
                 })?;
                 let file_type = entry.file_type().map_err(|error| {
                     TemplateError::load(format!(
@@ -182,7 +176,10 @@ impl TemplateSource for FsSource {
                 validate_name(&name)?;
 
                 let metadata = entry.metadata().map_err(|error| {
-                    TemplateError::load(format!("读取文件元信息失败（{}）：{error}", path.display()))
+                    TemplateError::load(format!(
+                        "读取文件元信息失败（{}）：{error}",
+                        path.display()
+                    ))
                 })?;
                 if metadata.len() > self.max_template_bytes {
                     return Err(TemplateError::load(format!(

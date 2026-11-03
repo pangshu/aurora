@@ -45,10 +45,10 @@ use crate::scheduler::Scheduler;
 #[cfg(feature = "security")]
 use crate::security::SecurityContext;
 use crate::telemetry::HealthRegistry;
-#[cfg(feature = "template")]
-use crate::template::TemplateEngine;
 #[cfg(feature = "metrics")]
 use crate::telemetry::Metrics;
+#[cfg(feature = "template")]
+use crate::template::TemplateEngine;
 
 /// 全局应用状态。
 #[derive(Clone, Debug)]

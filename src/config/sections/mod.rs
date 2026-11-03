@@ -99,10 +99,10 @@ pub use telemetry::{
     FileOverflow, FileRotation, FileSection, FileWriteMode, MetricsSection, OtelSection,
     TelemetrySection,
 };
-#[cfg(feature = "tls")]
-pub use tls::{OcspSection, TlsSection};
 #[cfg(feature = "template")]
 pub use template::TemplateSection;
+#[cfg(feature = "tls")]
+pub use tls::{OcspSection, TlsSection};
 #[cfg(feature = "security")]
 pub use validation::ValidationSection;
 #[cfg(feature = "watch")]

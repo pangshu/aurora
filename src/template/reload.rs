@@ -145,19 +145,18 @@ impl TemplateWatcher {
 
         // 只关心「有没有事件」，事件内容不重要：任何变化都触发一次全量重载。
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<()>();
-        let mut watcher = notify::recommended_watcher(
-            move |event: Result<notify::Event, notify::Error>| {
+        let mut watcher =
+            notify::recommended_watcher(move |event: Result<notify::Event, notify::Error>| {
                 if event.is_ok() {
                     let _ = tx.send(());
                 }
-            },
-        )
-        .map_err(|error| {
-            AppError::biz(
-                ErrorCode::SERVICE_UNAVAILABLE,
-                format!("模板监听器创建失败：{error}"),
-            )
-        })?;
+            })
+            .map_err(|error| {
+                AppError::biz(
+                    ErrorCode::SERVICE_UNAVAILABLE,
+                    format!("模板监听器创建失败：{error}"),
+                )
+            })?;
         watcher
             .watch(dir, notify::RecursiveMode::Recursive)
             .map_err(|error| {

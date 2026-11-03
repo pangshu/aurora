@@ -259,25 +259,24 @@ impl AppState {
         // 模板目录热更新（feature template-hot-reload）：与配置热更新同策——启动失败
         // **不阻断**（开发期便利，不是正确性依赖），只告警并继续以静态模板运行。
         #[cfg(all(feature = "template", feature = "template-hot-reload"))]
-        let template_watcher = if config.template.hot_reload
-            && !config.template.dir.trim().is_empty()
-        {
-            match template.watch() {
-                Ok(watcher) => {
-                    tracing::info!(
-                        dir = %config.template.dir,
-                        "模板热更新已启用（静默 200ms 后重载）"
-                    );
-                    Some(std::sync::Arc::new(watcher))
+        let template_watcher =
+            if config.template.hot_reload && !config.template.dir.trim().is_empty() {
+                match template.watch() {
+                    Ok(watcher) => {
+                        tracing::info!(
+                            dir = %config.template.dir,
+                            "模板热更新已启用（静默 200ms 后重载）"
+                        );
+                        Some(std::sync::Arc::new(watcher))
+                    }
+                    Err(error) => {
+                        tracing::warn!(%error, "模板热更新启动失败，继续以静态模板运行");
+                        None
+                    }
                 }
-                Err(error) => {
-                    tracing::warn!(%error, "模板热更新启动失败，继续以静态模板运行");
-                    None
-                }
-            }
-        } else {
-            None
-        };
+            } else {
+                None
+            };
 
         // 指标（feature metrics）：纯内存注册表，无外部依赖
         #[cfg(feature = "metrics")]
