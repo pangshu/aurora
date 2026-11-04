@@ -32,7 +32,8 @@ pub async fn connect(cfg: &DatabaseSection) -> Result<DbPool, StartupError> {
         .acquire_timeout(cfg.acquire_timeout)
         .idle_timeout(cfg.idle_timeout)
         .max_lifetime(cfg.max_lifetime)
-        .sqlx_logging(false);
+        // 必须显式传配置值：`ConnectOptions` 的默认是 `true`，漏传会把语句日志打开
+        .sqlx_logging(cfg.sqlx_logging);
 
     let db = Database::connect(options)
         .await
@@ -44,7 +45,11 @@ pub async fn connect(cfg: &DatabaseSection) -> Result<DbPool, StartupError> {
             ))
         })?;
 
-    tracing::info!(table_prefix = %cfg.table_prefix, "database connected");
+    tracing::info!(
+        table_prefix = %cfg.table_prefix,
+        sqlx_logging = cfg.sqlx_logging,
+        "database connected"
+    );
     Ok(db)
 }
 

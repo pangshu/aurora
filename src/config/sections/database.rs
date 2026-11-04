@@ -49,6 +49,15 @@ pub struct DatabaseSection {
     /// 只加密不验签的 `sslmode=require` / `ssl-mode=REQUIRED` 同样会被拒绝：
     /// 加密挡不住中间人，必须验证书。
     pub allow_insecure: bool,
+    /// 是否输出 sqlx 语句日志（每条 SQL 一条 tracing 事件，目标 `sqlx::query`）。
+    ///
+    /// 默认 `false`：打开等于把每条 SQL 灌进日志，只在开发 / 排障时开。
+    /// 事件落在当前 span 内，因此请求期 SQL 会自带 `trace_id` / `method` / `path`。
+    /// 是**建连时**生效的参数，改动需重启（不参与热更新）。
+    ///
+    /// 级别固定 `Info`（sea-orm 默认）：sqlx 对一条语句只发一个事件，info / debug /
+    /// trace 的信息量一样，多暴露一级只会造成「配了 debug 却没日志」的困惑。
+    pub sqlx_logging: bool,
 }
 
 impl Default for DatabaseSection {
@@ -64,6 +73,7 @@ impl Default for DatabaseSection {
             max_lifetime: Duration::from_secs(1800),
             migrate_on_start: false,
             allow_insecure: false,
+            sqlx_logging: false,
         }
     }
 }
