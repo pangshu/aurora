@@ -8,6 +8,7 @@
 mod appender;
 pub(crate) mod format;
 pub(crate) mod health;
+mod json_format;
 mod layer;
 mod logging;
 #[cfg(feature = "metrics")]

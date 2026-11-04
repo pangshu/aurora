@@ -209,11 +209,26 @@ fn init_inner(
 
     // 同一条事件会被格式化两次（控制台 + 文件）——双目的地必然的代价；
     // 只落盘时把 `[telemetry].stdout = false`。文件层固定关掉 ANSI 转义。
+    //
+    // JSON 走自定义 formatter：`trace_id` 提升到顶层、事件字段平铺（见
+    // `telemetry::json_format`）。Pretty 保持 stock 输出——人读场景需要颜色与对齐。
+    let json_format = crate::telemetry::json_format::JsonWithTraceId::with_spans();
     let dispatch = match cfg.format {
         LogFormat::Json => Dispatch::new(
             registry
-                .with(fmt::layer().json().with_writer(console))
-                .with(fmt::layer().json().with_ansi(false).with_writer(file)),
+                .with(
+                    fmt::layer()
+                        .json()
+                        .event_format(json_format)
+                        .with_writer(console),
+                )
+                .with(
+                    fmt::layer()
+                        .json()
+                        .event_format(json_format)
+                        .with_ansi(false)
+                        .with_writer(file),
+                ),
         ),
         LogFormat::Pretty => Dispatch::new(
             registry

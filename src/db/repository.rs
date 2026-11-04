@@ -4,13 +4,13 @@
 //! 定义自己的 Repository trait 实现（见 `docs/10` §4）。本模块提供：
 //!
 //! - [`Repository`]：为任意 SeaORM 实体提供**分页读取**（Offset / 游标），
-//!   直接实现于 [`DbPool`] 与 [`DatabaseTransaction`]，也可被替身替换（便于测试）。
+//!   直接实现于 [`DbPool`] 与 [`DbTransaction`]，也可被替身替换（便于测试）。
 //! - [`require_found`]：把「未找到」映射为 `30001`。
 
 use async_trait::async_trait;
-use sea_orm::{ConnectionTrait, DatabaseTransaction, EntityTrait, PaginatorTrait};
+use sea_orm::{ConnectionTrait, EntityTrait, PaginatorTrait};
 
-use crate::db::pool::DbPool;
+use crate::db::pool::{DbPool, DbTransaction};
 use crate::errors::{AppError, AppResult};
 use crate::utils::pagination::{Page, clamp_page_size};
 
@@ -73,12 +73,12 @@ where
 }
 
 #[async_trait]
-impl<E> Repository<E> for DatabaseTransaction
+impl<E> Repository<E> for DbTransaction
 where
     E: EntityTrait,
     E::Model: Send + Sync + 'static,
 {
-    type Connection = DatabaseTransaction;
+    type Connection = DbTransaction;
 
     fn connection(&self) -> &Self::Connection {
         self

@@ -33,7 +33,7 @@ pub use futures_util::StreamExt;
 /// 逐条产出、不在内存里堆积结果集。**错误按条产出**（`Item = AppResult<Model>`），
 /// 调用方可以跳过坏行继续，也可以整体中断——不会因为一行失败丢掉整批。
 ///
-/// 连接池（[`DbPool`](crate::db::DbPool)）与事务（`DatabaseTransaction`）都实现了
+/// 连接池（[`DbPool`](crate::db::DbPool)）与事务（[`DbTransaction`]）都实现了
 /// `StreamTrait`，两者都能用。但流会**一直占用连接直到消费完毕**，所以大批量导出
 /// 请在连接池上执行，不要放进长事务。
 ///

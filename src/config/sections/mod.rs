@@ -55,7 +55,7 @@ pub use cache::{
     CacheBackend, CacheSection, LimitsSection, LockSection, RedisSection, SingleflightSection,
 };
 #[cfg(feature = "db")]
-pub use database::DatabaseSection;
+pub use database::{DatabaseSection, SqlLogSection};
 #[cfg(feature = "geoip")]
 pub use geoip::GeoIpSection;
 #[cfg(feature = "csrf")]

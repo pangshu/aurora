@@ -57,7 +57,51 @@ pub struct DatabaseSection {
     ///
     /// 级别固定 `Info`（sea-orm 默认）：sqlx 对一条语句只发一个事件，info / debug /
     /// trace 的信息量一样，多暴露一级只会造成「配了 debug 却没日志」的困惑。
+    ///
+    /// 与 [`sql_log`](Self::sql_log) 同时开启时**会被强制关闭**：sqlx 那条事件
+    /// 拿不到绑定参数（参数在其内部已是二进制 `Arguments`），信息严格劣于
+    /// `sql_log`，两条并存只会污染「SQL 条数 / 耗时分布」这类统计。
     pub sqlx_logging: bool,
+    /// SQL 语句日志（带绑定参数，target `aurora::sql`）。
+    pub sql_log: SqlLogSection,
+}
+
+/// SQL 语句日志（`[database].sql_log`，feature `db`）。
+///
+/// 由 `DbPool` 在语句执行前后采集：`ConnectionTrait` 的 `*_raw` 方法是所有查询的
+/// 唯一必经入口，因此 ORM 查询、`Repository` 分页、事务内语句都能覆盖。
+///
+/// **参数原样输出、不做脱敏**（[`enabled`](Self::enabled) 的文档里写明了后果）：
+/// 开关是唯一防线，生产环境默认关闭。
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default)]
+#[non_exhaustive]
+pub struct SqlLogSection {
+    /// 总开关，默认 `false`。
+    ///
+    /// 打开后每条语句在 target `aurora::sql` 发一条 `INFO` 事件，字段为
+    /// `op` / `sql`（占位符原文，Postgres 是 `$1..$n`、MySQL/SQLite 是 `?`）/
+    /// `params`（按绑定顺序的 SQL 字面量列表）/ `in_transaction` / `elapsed_ms` / `rows`。
+    ///
+    /// ⚠️ **参数不做脱敏**：`password_hash`、`id_card`、`token` 这类列的值会完整落盘。
+    /// 只在开发 / 排障时打开；生产环境建议只依赖 [`slow_threshold`](Self::slow_threshold)
+    /// 的慢查询告警，而不是全量语句日志。
+    pub enabled: bool,
+    /// 慢查询阈值：语句耗时达到该值时，事件从 `INFO` 升到 `WARN` 并带 `slow = true`。
+    ///
+    /// 默认 `500ms`；设为 `0s` 表示**不升级**（全部保持 `INFO`）。
+    /// 与 [`enabled`](Self::enabled) 无关：关闭总开关时不产生任何事件。
+    #[serde(deserialize_with = "de_duration")]
+    pub slow_threshold: Duration,
+}
+
+impl Default for SqlLogSection {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            slow_threshold: Duration::from_millis(500),
+        }
+    }
 }
 
 impl Default for DatabaseSection {
@@ -74,6 +118,7 @@ impl Default for DatabaseSection {
             migrate_on_start: false,
             allow_insecure: false,
             sqlx_logging: false,
+            sql_log: SqlLogSection::default(),
         }
     }
 }
@@ -99,6 +144,8 @@ impl DatabaseSection {
         // 表前缀会直接拼进 SQL 的表名（无法参数化绑定），必须白名单校验。
         crate::db::prefix::validate(&self.table_prefix)?;
 
+        self.warn_on_sql_log();
+
         let scheme = scheme_of(&self.url);
         if self.allow_insecure {
             if matches!(scheme.as_str(), "postgres" | "postgresql" | "mysql") {
@@ -111,6 +158,27 @@ impl DatabaseSection {
         }
 
         require_tls(&scheme, &self.url)
+    }
+
+    /// SQL 日志的启动告警。
+    ///
+    /// 刻意**只 warn 不 fail**：`sql_log` 是排查工具而非安全开关，为一个日志选项
+    /// 阻断启动过重；但两条告警都是「用户大概率没意识到后果」的场景，必须显式说清。
+    fn warn_on_sql_log(&self) {
+        if !self.sql_log.enabled {
+            return;
+        }
+        if self.sqlx_logging {
+            tracing::warn!(
+                "[database].sqlx_logging 与 [database].sql_log 同时开启：同一语句会产生\
+                 两条事件（sqlx 那条没有绑定参数）。连接时将强制关闭 sqlx 日志"
+            );
+        }
+        tracing::warn!(
+            slow_threshold = ?self.sql_log.slow_threshold,
+            "[database].sql_log 已开启：SQL 参数**原样**写入日志、不做脱敏，\
+             仅在开发 / 排障时使用"
+        );
     }
 }
 
@@ -285,5 +353,55 @@ mod tests {
                 .validate()
                 .is_err()
         );
+    }
+
+    #[test]
+    fn should_default_sql_log_off() {
+        let section = DatabaseSection::default();
+        assert!(!section.sql_log.enabled, "SQL 参数日志默认必须关闭");
+        assert_eq!(
+            section.sql_log.slow_threshold,
+            Duration::from_millis(500),
+            "慢查询阈值默认 500ms"
+        );
+    }
+
+    #[test]
+    fn should_parse_sql_log_section() {
+        let json = r#"
+            {
+                "url": "sqlite::memory:",
+                "sql_log": { "enabled": true, "slow_threshold": "2s" }
+            }
+        "#;
+        let section: DatabaseSection = serde_json::from_str(json).unwrap();
+        assert!(section.sql_log.enabled);
+        assert_eq!(section.sql_log.slow_threshold, Duration::from_secs(2));
+
+        // 只写 enabled：子结构体的 `#[serde(default)]` 保证其余字段取默认值
+        let section: DatabaseSection = serde_json::from_str(
+            r#"{ "url": "sqlite::memory:", "sql_log": { "enabled": true } }"#,
+        )
+        .unwrap();
+        assert!(section.sql_log.enabled);
+        assert_eq!(
+            section.sql_log.slow_threshold,
+            Duration::from_millis(500)
+        );
+    }
+
+    #[test]
+    fn should_only_warn_when_sql_log_conflicts_with_sqlx_logging() {
+        // 冲突是可恢复的（连接时强制关闭 sqlx 日志），不能因此阻断启动
+        let section = DatabaseSection {
+            url: "sqlite::memory:".to_string(),
+            sqlx_logging: true,
+            sql_log: SqlLogSection {
+                enabled: true,
+                ..SqlLogSection::default()
+            },
+            ..DatabaseSection::default()
+        };
+        assert!(section.validate().is_ok());
     }
 }

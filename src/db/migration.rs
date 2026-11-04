@@ -16,10 +16,15 @@ use crate::errors::AppResult;
 
 /// 执行全部未应用的迁移（`up`）。
 ///
+/// 迁移走内层连接（[`DbPool::inner`]）：`MigratorTrait` 只接受
+/// `IntoSchemaManagerConnection`，该 trait 仅对 `&DatabaseConnection` /
+/// `&DatabaseTransaction` 实现，没有 `ConnectionTrait` 的通用实现。
+/// 副作用是迁移的 DDL 不进 SQL 日志——正好，它们没有绑定参数、且噪声很大。
+///
 /// # Errors
 /// 迁移失败返回映射后的 [`crate::errors::AppError`]（`50002`）。
 pub async fn up<M: MigratorTrait>(db: &DbPool) -> AppResult<()> {
-    M::up(db, None).await?;
+    M::up(db.inner(), None).await?;
     Ok(())
 }
 
@@ -28,7 +33,7 @@ pub async fn up<M: MigratorTrait>(db: &DbPool) -> AppResult<()> {
 /// # Errors
 /// 迁移失败返回映射后的 [`crate::errors::AppError`]（`50002`）。
 pub async fn down<M: MigratorTrait>(db: &DbPool, steps: u32) -> AppResult<()> {
-    M::down(db, Some(steps)).await?;
+    M::down(db.inner(), Some(steps)).await?;
     Ok(())
 }
 
@@ -37,7 +42,7 @@ pub async fn down<M: MigratorTrait>(db: &DbPool, steps: u32) -> AppResult<()> {
 /// # Errors
 /// 查询失败返回映射后的 [`crate::errors::AppError`]（`50002`）。
 pub async fn status<M: MigratorTrait>(db: &DbPool) -> AppResult<()> {
-    M::status(db).await?;
+    M::status(db.inner()).await?;
     Ok(())
 }
 

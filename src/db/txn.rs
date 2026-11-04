@@ -9,12 +9,12 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use sea_orm::{DatabaseTransaction, DbErr, TransactionError, TransactionTrait};
+use sea_orm::{DbErr, TransactionError, TransactionTrait};
 
-use crate::db::pool::DbPool;
+use crate::db::pool::{DbPool, DbTransaction};
 use crate::errors::{AppError, AppResult};
 
-/// 事务闭包类型：接收 `&DatabaseTransaction`，返回 boxed future。
+/// 事务闭包类型：接收 `&DbTransaction`，返回 boxed future。
 pub type TxFuture<'c, T> = Pin<Box<dyn Future<Output = AppResult<T>> + Send + 'c>>;
 
 /// 在事务中执行 `f`：返回 `Ok` 自动 commit，返回 `Err` 自动 rollback。
@@ -38,7 +38,7 @@ pub type TxFuture<'c, T> = Pin<Box<dyn Future<Output = AppResult<T>> + Send + 'c
 /// 事务执行失败或闭包返回 `Err` 时返回对应 [`AppError`]。
 pub async fn transaction<F, T>(db: &DbPool, f: F) -> AppResult<T>
 where
-    F: for<'c> FnOnce(&'c DatabaseTransaction) -> TxFuture<'c, T> + Send,
+    F: for<'c> FnOnce(&'c DbTransaction) -> TxFuture<'c, T> + Send,
     T: Send,
 {
     db.transaction(f).await.map_err(map_transaction_error)
@@ -53,7 +53,7 @@ where
 /// 重试耗尽或遇到不可重试错误时返回对应 [`AppError`]。
 pub async fn transaction_with_retry<F, T>(db: &DbPool, max_attempts: u32, f: F) -> AppResult<T>
 where
-    F: for<'c> Fn(&'c DatabaseTransaction) -> TxFuture<'c, T> + Send + Sync,
+    F: for<'c> Fn(&'c DbTransaction) -> TxFuture<'c, T> + Send + Sync,
     T: Send,
 {
     let attempts = max_attempts.max(1);
