@@ -490,6 +490,30 @@ pub async fn connect(cfg: &DatabaseSection) -> Result<DbPool, StartupError> {
         // 必须显式传配置值：`ConnectOptions` 的默认是 `true`，漏传会把语句日志打开
         .sqlx_logging(sqlx_logging);
 
+    // MySQL 的 `DEFAULT CURRENT_TIMESTAMP(3)` 取的是**会话时区**：应用写的是
+    // `[server].timezone` 的墙上时间，DB 默认值也必须是同一个偏移，否则同表里
+    // 两种语义混存。驱动默认是 `+00:00`（sqlx 硬编码），必须显式覆盖。
+    #[cfg(feature = "db-mysql")]
+    let session_time_zone = {
+        let offset = crate::utils::time::session_offset();
+        let for_opts = offset.clone();
+        options.map_sqlx_mysql_opts(move |opts| opts.timezone(for_opts.clone()));
+        // 会话时区是启动快照：DST 切换后默认值会偏 1 小时，必须让运维知道
+        if let Some(tz) = crate::utils::time::app_timezone()
+            && crate::utils::time::observes_dst(tz)
+        {
+            tracing::warn!(
+                tz = %tz.name(),
+                session_time_zone = %offset,
+                "该时区观测夏令时：MySQL 会话时区是启动时的固定偏移，\
+                 DST 切换后 DEFAULT CURRENT_TIMESTAMP 会偏 1 小时——请在切换日重启"
+            );
+        }
+        Some(offset)
+    };
+    #[cfg(not(feature = "db-mysql"))]
+    let session_time_zone: Option<String> = None;
+
     let db = Database::connect(options)
         .await
         // 驱动原文可能带完整连接串（含口令）：进日志前先抹掉 userinfo
@@ -504,6 +528,7 @@ pub async fn connect(cfg: &DatabaseSection) -> Result<DbPool, StartupError> {
         table_prefix = %cfg.table_prefix,
         sqlx_logging,
         sql_log = cfg.sql_log.enabled,
+        time_zone = session_time_zone.as_deref().unwrap_or("<driver default>"),
         "database connected"
     );
     Ok(DbPool::with_sql_log(

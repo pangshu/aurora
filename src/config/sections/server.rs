@@ -27,6 +27,15 @@ pub struct ServerSection {
     pub host: String,
     /// 监听端口。
     pub port: u16,
+    /// 应用时区（IANA 名，如 `Asia/Shanghai`）。
+    ///
+    /// **空串 = 跟随系统时区**（[`chrono::Local`]，含 `TZ` 环境变量）。它同时决定：
+    /// 日志时间戳、写库的墙上时间（`create_time` 等 `datetime` 列）、读库还原绝对时刻、
+    /// MySQL 会话时区（`DEFAULT CURRENT_TIMESTAMP` 依赖它）。
+    ///
+    /// 进程级设置，**不可热更新**：运行期改配置不会生效，变更需重启；对已有数据而言，
+    /// 改时区等价于一次数据平移（见应用侧 `tz_shift` 脚本）。
+    pub timezone: String,
     /// Tokio worker 线程数；缺省（`None`）表示使用 CPU 核数。
     pub worker_threads: Option<u32>,
     /// **普通请求**总超时（入站）；SSE / WS 豁免，由 `[realtime].heartbeat_timeout` 治理。
@@ -59,6 +68,7 @@ impl Default for ServerSection {
         Self {
             host: "0.0.0.0".to_string(),
             port: 8080,
+            timezone: String::new(),
             worker_threads: None,
             request_timeout: Duration::from_secs(10),
             timeout_exempt_paths: Vec::new(),
@@ -83,6 +93,13 @@ impl ServerSection {
         }
         if self.host.parse::<IpAddr>().is_err() {
             return Err(format!("invalid server.host `{}`", self.host));
+        }
+        let timezone = self.timezone.trim();
+        if !timezone.is_empty() && crate::utils::time::parse_timezone(timezone).is_err() {
+            return Err(format!(
+                "[server].timezone = \"{timezone}\" 不是合法的 IANA 时区\
+                 （如 Asia/Shanghai；留空表示跟随系统时区）"
+            ));
         }
         if self.trust_proxy && self.trusted_proxies.is_empty() {
             return Err("[server].trust_proxy = true 但 trusted_proxies 为空：\

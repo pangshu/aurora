@@ -232,8 +232,17 @@ fn init_inner(
         ),
         LogFormat::Pretty => Dispatch::new(
             registry
-                .with(fmt::layer().with_writer(console))
-                .with(fmt::layer().with_ansi(false).with_writer(file)),
+                .with(
+                    fmt::layer()
+                        .with_timer(crate::telemetry::timer::LocalTime)
+                        .with_writer(console),
+                )
+                .with(
+                    fmt::layer()
+                        .with_timer(crate::telemetry::timer::LocalTime)
+                        .with_ansi(false)
+                        .with_writer(file),
+                ),
         ),
     };
 

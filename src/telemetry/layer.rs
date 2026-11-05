@@ -99,6 +99,12 @@ pub fn try_current_trace_id() -> Option<TraceId> {
 /// trace-id，比明确写 `unknown` 更容易误导排查。
 pub const UNKNOWN_TRACE_ID: &str = "unknown";
 
+/// 回写 trace-id 的响应头名。
+///
+/// 同时是「已经离开请求作用域」的调用方取回 trace-id 的唯一途径：最外层中间件在
+/// `next.run` 返回之后才 spawn 后台任务，那时 task-local 已回收，只能读这个头。
+pub const TRACE_ID_HEADER: &str = "x-trace-id";
+
 /// 读取当前请求的 trace-id。
 ///
 /// 若不在请求作用域内（启动期、单元测试、`tokio::spawn` / `spawn_blocking` 出来的

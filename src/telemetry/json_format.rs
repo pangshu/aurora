@@ -63,14 +63,26 @@ where
         let mut fields = Map::new();
         event.record(&mut FieldVisitor(&mut fields));
 
+        // span 链先收集：`trace_id` 的兜底取值要从 span 字段里读（见 `resolve_trace_id`）
+        let spans = if self.spans { collect_spans(ctx) } else { None };
+
         let mut root = Map::new();
         root.insert(
             "timestamp".to_owned(),
-            json!(Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)),
+            // 应用时区（`[server].timezone`）的 RFC3339：未配置时跟随系统；偏移为 0
+            // 时仍输出 `Z`，因此「跟随系统 + 系统为 UTC」与历史行为逐字节一致。
+            json!(crate::utils::time::format_rfc3339_at(
+                Utc::now(),
+                crate::utils::time::app_timezone(),
+                SecondsFormat::Millis,
+            )),
         );
         root.insert("level".to_owned(), json!(metadata.level().as_str()));
         root.insert("target".to_owned(), json!(metadata.target()));
-        root.insert("trace_id".to_owned(), json!(resolve_trace_id(&fields)));
+        root.insert(
+            "trace_id".to_owned(),
+            json!(resolve_trace_id(&fields, spans.as_ref())),
+        );
 
         for (key, value) in fields {
             if !RESERVED.contains(&key.as_str()) {
@@ -78,9 +90,7 @@ where
             }
         }
 
-        if self.spans
-            && let Some(spans) = collect_spans(ctx)
-        {
+        if let Some(spans) = spans {
             root.insert("spans".to_owned(), spans);
         }
 
@@ -90,15 +100,27 @@ where
 
 /// 决定本次事件的 `trace_id`。
 ///
-/// task-local 优先：`access_log` 之类自己写了 `trace_id` 字段的调用点，
-/// 在请求作用域内外都能得到一致的值（作用域外两者都落到 `unknown`）。
-fn resolve_trace_id(fields: &Map<String, Value>) -> String {
+/// 取值顺序：
+///
+/// 1. task-local（请求作用域的**权威**来源）；
+/// 2. 事件自带的 `trace_id` 字段（`access_log` 这类自己写了的调用点）；
+/// 3. span 链里**最深**的 `trace_id` 字段——兜住「span 继承到了、task-local 没跟过去」
+///    的情况（例如只 `instrument` 没有 `scope` 的手写 spawn）；
+/// 4. [`UNKNOWN_TRACE_ID`]。
+fn resolve_trace_id(fields: &Map<String, Value>, spans: Option<&Value>) -> String {
     if let Some(trace_id) = try_current_trace_id() {
         return trace_id.as_str().to_owned();
     }
-    fields
-        .get("trace_id")
-        .and_then(Value::as_str)
+    if let Some(trace_id) = fields.get("trace_id").and_then(Value::as_str) {
+        return trace_id.to_owned();
+    }
+    spans
+        .and_then(Value::as_array)
+        .and_then(|list| {
+            list.iter()
+                .rev()
+                .find_map(|span| span.get("trace_id").and_then(Value::as_str))
+        })
         .map_or_else(|| UNKNOWN_TRACE_ID.to_owned(), str::to_owned)
 }
 

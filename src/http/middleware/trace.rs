@@ -22,12 +22,12 @@ use axum::middleware::Next;
 use axum::response::Response;
 use tracing::Instrument;
 
-use crate::telemetry::{TraceId, scope, trace_id_from_headers};
+use crate::telemetry::{TRACE_ID_HEADER, TraceId, scope, trace_id_from_headers};
 use crate::utils::ProxyTrust;
 
 /// 响应头名：`X-Trace-Id`。
 fn trace_header() -> HeaderName {
-    HeaderName::from_static("x-trace-id")
+    HeaderName::from_static(TRACE_ID_HEADER)
 }
 
 /// 解析或生成 trace-id，建立 span 与作用域，并回写 `X-Trace-Id`。

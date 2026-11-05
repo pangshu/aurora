@@ -13,6 +13,8 @@ mod layer;
 mod logging;
 #[cfg(feature = "metrics")]
 pub(crate) mod metrics;
+mod spawn;
+mod timer;
 #[cfg(feature = "otel")]
 pub(crate) mod trace;
 
@@ -22,9 +24,10 @@ pub use health::{
     probe_failure,
 };
 pub use layer::{
-    InvalidTraceId, TraceId, UNKNOWN_TRACE_ID, current_trace_id, new_trace_id, scope,
-    trace_id_from_headers, try_current_trace_id,
+    InvalidTraceId, TRACE_ID_HEADER, TraceId, UNKNOWN_TRACE_ID, current_trace_id, new_trace_id,
+    scope, trace_id_from_headers, try_current_trace_id,
 };
+pub use spawn::{spawn, spawn_in_trace};
 #[cfg(feature = "metrics")]
 pub use metrics::Metrics;
 

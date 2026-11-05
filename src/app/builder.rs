@@ -77,6 +77,10 @@ impl AppState {
             production = config.is_production(),
             "配置已加载"
         );
+        // 时区是进程级设置：日志时间戳、DB 读写与会话时区共用它。应用入口通常
+        // 已在 `init_tracing` 之前调过一次（否则启动早期日志仍是系统时区），这里
+        // 再调一次兜底：同值幂等，异值报错（时区不可热更新）。
+        crate::utils::time::init(&config.server.timezone).map_err(StartupError::Config)?;
         // 传输层加固提示：应用层没有请求头读超时，必须由前置代理承担（见函数文档）
         crate::boot::startup::warn_transport_hardening(config);
         let config_handle = ConfigHandle::new(config.clone());
